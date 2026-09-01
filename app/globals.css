@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-primary: #0369a1;
+  --color-primary-foreground: #ffffff;
+  --color-secondary: #38bdf8;
+  --color-secondary-foreground: #0f172a;
+  --color-accent: #16a34a;
+  --color-accent-foreground: #ffffff;
+  --color-background: #f0f9ff;
+  --color-foreground: #0c4a6e;
+  --color-card: #ffffff;
+  --color-card-foreground: #0c4a6e;
+  --color-muted: #e7eff5;
+  --color-muted-foreground: #475569;
+  --color-border: #cfe4f5;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-ring: #0369a1;
+
+  --color-warning: #b45309;
+  --color-warning-bg: #fef3c7;
+  --color-warning-foreground: #78350f;
+  --color-success-bg: #dcfce7;
+  --color-success-foreground: #166534;
+  --color-danger-bg: #fee2e2;
+  --color-danger-foreground: #991b1b;
+}
+
+* {
+  border-color: var(--color-border);
+}
+
+html {
+  font-size: 18px;
+}
+
+body {
+  background-color: var(--color-background);
+  color: var(--color-foreground);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-ring);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
