@@ -36,6 +36,24 @@ export interface TransferRequestView {
   approved_by?: string
 }
 
+export interface ScamStatusView {
+  target: string
+  count: number
+  reporters: string[]
+  blocked: boolean
+}
+
+export class TrikeApiError extends Error {
+  blocked?: boolean
+  scamReportCount?: number
+
+  constructor(message: string, extra?: { blocked?: boolean; scamReportCount?: number }) {
+    super(message)
+    this.blocked = extra?.blocked
+    this.scamReportCount = extra?.scamReportCount
+  }
+}
+
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await fetch(url, {
     method: 'POST',
@@ -43,7 +61,9 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   })
   const data = await res.json()
-  if (!res.ok) throw new Error(data.error || 'Error de red')
+  if (!res.ok) {
+    throw new TrikeApiError(data.error || 'Error de red', { blocked: data.blocked, scamReportCount: data.scamReportCount })
+  }
   return data as T
 }
 
@@ -94,6 +114,15 @@ export async function rejectTransfer(guardian: string, requestId: number) {
 
 export async function fetchAccount(owner: string): Promise<ProtectedAccountView> {
   return getJson(`/api/account/${owner}`)
+}
+
+export async function reportScam(reporter: string, target: string) {
+  const { xdr } = await postJson<{ xdr: string }>('/api/scam/report', { reporter, target })
+  return signAndSubmit(xdr, reporter)
+}
+
+export async function fetchScamStatus(target: string): Promise<ScamStatusView> {
+  return getJson(`/api/scam/${target}`)
 }
 
 export async function fetchRequest(requestId: number): Promise<TransferRequestView> {

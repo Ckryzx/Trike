@@ -17,6 +17,9 @@ export function Navbar() {
           <Link href="/guardian" className="rounded-lg px-2 py-1 hover:text-primary">
             Guardián
           </Link>
+          <Link href="/reportar" className="rounded-lg px-2 py-1 hover:text-primary">
+            Reportar cuenta
+          </Link>
         </nav>
         <WalletButton />
       </div>

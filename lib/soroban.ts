@@ -39,6 +39,13 @@ export interface TransferRequest {
   approved_by?: string
 }
 
+export interface ScamReport {
+  target: string
+  count: number
+  reporters: string[]
+  blocked: boolean
+}
+
 function getContract(): Contract {
   if (!CONTRACT_ID) throw new Error('TRIKE_CONTRACT_ID no está configurado')
   return new Contract(CONTRACT_ID)
@@ -49,6 +56,7 @@ function getRpcServer(): rpc.Server {
 }
 
 const addressArg = (address: string) => nativeToScVal(address, { type: 'address' })
+const u32Arg = (value: number) => nativeToScVal(value, { type: 'u32' })
 const u64Arg = (value: number | bigint) => nativeToScVal(BigInt(value), { type: 'u64' })
 const i128Arg = (value: number | bigint) => nativeToScVal(BigInt(value), { type: 'i128' })
 const optionalI128Arg = (value: number | bigint | undefined) =>
@@ -184,6 +192,10 @@ export function prepareRejectTransfer(guardian: string, requestId: number) {
   return buildUnsignedTx(guardian, 'reject_transfer', [addressArg(guardian), u64Arg(requestId)])
 }
 
+export function prepareReportScam(reporter: string, target: string) {
+  return buildUnsignedTx(reporter, 'report_scam', [addressArg(reporter), addressArg(target)])
+}
+
 // --- Escritura firmada por el backend (cuenta oracle) ---
 
 export async function recordDeposit(owner: string, amount: number) {
@@ -202,6 +214,18 @@ export async function expireRequest(requestId: number) {
   return signAndSubmit(unsignedXdr, oracle)
 }
 
+/** Bloqueo definitivo de una cuenta reportada. Lo dispara el admin (el propio equipo
+ *  de Trike) desde el panel interno; se firma con la cuenta oracle porque es la misma
+ *  dirección configurada como admin del contrato. */
+export async function adminBlockAccount(target: string) {
+  const oracle = getOracleKeypair()
+  const unsignedXdr = await buildUnsignedTx(oracle.publicKey(), 'admin_block_account', [
+    addressArg(oracle.publicKey()),
+    addressArg(target),
+  ])
+  return signAndSubmit(unsignedXdr, oracle)
+}
+
 // --- Lectura ---
 
 export async function getAccount(owner: string): Promise<ProtectedAccount> {
@@ -215,4 +239,32 @@ export async function getRequest(requestId: number): Promise<TransferRequest> {
 
 export async function isApproved(requestId: number): Promise<boolean> {
   return simulateRead<boolean>('is_approved', [u64Arg(requestId)])
+}
+
+export async function getScamStatus(target: string): Promise<ScamReport> {
+  return simulateRead<ScamReport>('get_scam_status', [addressArg(target)])
+}
+
+export async function getReportedCount(): Promise<number> {
+  return simulateRead<number>('get_reported_count', [])
+}
+
+export async function getReportedAt(index: number): Promise<string | null> {
+  return simulateRead<string | null>('get_reported_at', [u32Arg(index)])
+}
+
+export async function getScamReportThreshold(): Promise<number> {
+  return simulateRead<number>('get_scam_report_threshold', [])
+}
+
+/** Recorre todas las cuentas reportadas (get_reported_count + get_reported_at) y trae
+ *  el estado de reportes de cada una. Pensado para el panel de admin. */
+export async function listScamReports(): Promise<ScamReport[]> {
+  const total = await getReportedCount()
+  const addresses: string[] = []
+  for (let i = 0; i < total; i++) {
+    const address = await getReportedAt(i)
+    if (address) addresses.push(address)
+  }
+  return Promise.all(addresses.map((address) => getScamStatus(address)))
 }

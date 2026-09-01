@@ -12,6 +12,7 @@ import {
   requestTransfer,
   REASON_LABELS,
   STATUS_LABELS,
+  TrikeApiError,
   type ProtectedAccountView,
   type TransferRequestView,
 } from '@/lib/api-client'
@@ -205,7 +206,13 @@ function RequestTransferForm({ owner, onDone }: { owner: string; onDone: () => v
       setResult(request)
       onDone()
     } catch (err: any) {
-      setError(err.message || 'No se pudo crear la solicitud de transferencia')
+      if (err instanceof TrikeApiError && err.blocked) {
+        setError(
+          `Esta cuenta de destino fue reportada como estafa (${err.scamReportCount} reportes) y quedó bloqueada. La transferencia no puede continuar.`
+        )
+      } else {
+        setError(err.message || 'No se pudo crear la solicitud de transferencia')
+      }
     } finally {
       setSubmitting(false)
     }

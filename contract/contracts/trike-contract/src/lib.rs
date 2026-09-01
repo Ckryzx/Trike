@@ -1,5 +1,5 @@
 #![no_std]
-use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, Symbol};
+use soroban_sdk::{contract, contracterror, contractimpl, contracttype, Address, Env, Symbol, Vec};
 
 // Umbral por defecto: transferencias sobre este monto requieren aprobación de guardián.
 const DEFAULT_THRESHOLD: i128 = 20_000;
@@ -15,6 +15,10 @@ const DEPOSIT_LOOKBACK: u64 = 48 * 3600;
 // Un monto se considera atípico si supera en este múltiplo el promedio histórico del usuario.
 const BEHAVIOR_MULTIPLIER: i128 = 3;
 
+// Cantidad de reportes de estafa distintos que una cuenta necesita acumular antes
+// de que el admin pueda revisarla para un bloqueo definitivo.
+const SCAM_REPORT_THRESHOLD: u32 = 5;
+
 #[contracterror]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum TrikeError {
@@ -28,6 +32,8 @@ pub enum TrikeError {
     UnauthorizedGuardian = 8,
     PrincipalWindowExpired = 9,
     NotYetSecondaryWindow = 10,
+    DestinationBlocked = 11,
+    AlreadyReported = 12,
 }
 
 #[contracttype]
@@ -37,6 +43,9 @@ pub enum DataKey {
     Account(Address),
     Request(u64),
     RequestCounter,
+    ScamReport(Address),
+    ReportedIndex(u32),
+    ReportedCount,
 }
 
 #[contracttype]
@@ -74,6 +83,15 @@ pub struct TransferRequest {
     pub risky: bool,
     pub reason: Symbol,
     pub approved_by: Option<Address>,
+}
+
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct ScamReport {
+    pub target: Address,
+    pub count: u32,
+    pub reporters: Vec<Address>,
+    pub blocked: bool,
 }
 
 #[contract]
@@ -158,6 +176,13 @@ impl TrikeContract {
         amount: i128,
     ) -> Result<u64, TrikeError> {
         owner.require_auth();
+
+        if let Some(report) = Self::load_scam_report(&env, &to) {
+            if report.blocked {
+                return Err(TrikeError::DestinationBlocked);
+            }
+        }
+
         let mut account = Self::load_account(&env, &owner)?;
         let now = env.ledger().timestamp();
 
@@ -326,6 +351,94 @@ impl TrikeContract {
         let request = Self::load_request(&env, request_id)?;
         Ok(request.status == RequestStatus::Approved)
     }
+
+    /// Reportar una cuenta como usada para estafas. Cualquiera con una wallet puede
+    /// reportar; cada wallet solo puede reportar una vez a un mismo destino.
+    pub fn report_scam(env: Env, reporter: Address, target: Address) -> Result<u32, TrikeError> {
+        reporter.require_auth();
+
+        let key = DataKey::ScamReport(target.clone());
+        let existing: Option<ScamReport> = env.storage().persistent().get(&key);
+        let mut report = match existing {
+            Some(report) => report,
+            None => {
+                let index = Self::next_reported_index(&env);
+                env.storage()
+                    .instance()
+                    .set(&DataKey::ReportedIndex(index), &target);
+                ScamReport {
+                    target: target.clone(),
+                    count: 0,
+                    reporters: Vec::new(&env),
+                    blocked: false,
+                }
+            }
+        };
+
+        if report.reporters.contains(&reporter) {
+            return Err(TrikeError::AlreadyReported);
+        }
+
+        report.reporters.push_back(reporter);
+        report.count += 1;
+        env.storage().persistent().set(&key, &report);
+        Ok(report.count)
+    }
+
+    /// Consultar el estado de reportes de estafa de una cuenta.
+    pub fn get_scam_status(env: Env, target: Address) -> ScamReport {
+        Self::load_scam_report(&env, &target).unwrap_or(ScamReport {
+            target,
+            count: 0,
+            reporters: Vec::new(&env),
+            blocked: false,
+        })
+    }
+
+    /// Bloqueo definitivo de una cuenta reportada. Solo el admin puede hacerlo,
+    /// típicamente tras revisar que acumuló suficientes reportes.
+    pub fn admin_block_account(env: Env, admin: Address, target: Address) -> Result<(), TrikeError> {
+        Self::require_admin(&env, &admin)?;
+
+        let key = DataKey::ScamReport(target.clone());
+        let mut report = match Self::load_scam_report(&env, &target) {
+            Some(report) => report,
+            None => {
+                let index = Self::next_reported_index(&env);
+                env.storage()
+                    .instance()
+                    .set(&DataKey::ReportedIndex(index), &target);
+                ScamReport {
+                    target: target.clone(),
+                    count: 0,
+                    reporters: Vec::new(&env),
+                    blocked: false,
+                }
+            }
+        };
+        report.blocked = true;
+        env.storage().persistent().set(&key, &report);
+        Ok(())
+    }
+
+    /// Número total de cuentas distintas que han recibido al menos un reporte
+    /// (permite al panel de admin recorrerlas todas vía get_reported_at).
+    pub fn get_reported_count(env: Env) -> u32 {
+        env.storage()
+            .instance()
+            .get(&DataKey::ReportedCount)
+            .unwrap_or(0)
+    }
+
+    /// Dirección de la cuenta reportada en la posición `index` (0-based).
+    pub fn get_reported_at(env: Env, index: u32) -> Option<Address> {
+        env.storage().instance().get(&DataKey::ReportedIndex(index))
+    }
+
+    /// Cantidad de reportes necesarios antes de que el admin deba revisar la cuenta.
+    pub fn get_scam_report_threshold(_env: Env) -> u32 {
+        SCAM_REPORT_THRESHOLD
+    }
 }
 
 impl TrikeContract {
@@ -367,6 +480,23 @@ impl TrikeContract {
             .instance()
             .set(&DataKey::RequestCounter, &next);
         next
+    }
+
+    fn load_scam_report(env: &Env, target: &Address) -> Option<ScamReport> {
+        env.storage()
+            .persistent()
+            .get(&DataKey::ScamReport(target.clone()))
+    }
+
+    fn next_reported_index(env: &Env) -> u32 {
+        let current: u32 = env
+            .storage()
+            .instance()
+            .get(&DataKey::ReportedCount)
+            .unwrap_or(0);
+        let next = current + 1;
+        env.storage().instance().set(&DataKey::ReportedCount, &next);
+        current
     }
 
     fn update_stats(account: &mut ProtectedAccount, amount: i128) {
