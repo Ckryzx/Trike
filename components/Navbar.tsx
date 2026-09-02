@@ -20,6 +20,9 @@ export function Navbar() {
           <Link href="/reportar" className="rounded-lg px-2 py-1 hover:text-primary">
             Reportar cuenta
           </Link>
+          <Link href="/dashboard" className="rounded-lg px-2 py-1 hover:text-primary">
+            Dashboard
+          </Link>
         </nav>
         <WalletButton />
       </div>

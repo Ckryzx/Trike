@@ -268,3 +268,20 @@ export async function listScamReports(): Promise<ScamReport[]> {
   }
   return Promise.all(addresses.map((address) => getScamStatus(address)))
 }
+
+export interface DashboardStats {
+  accountCount: number
+  transferCount: number
+  blockedCount: number
+}
+
+/** Métricas agregadas para el dashboard de clientes (solo lectura, sin datos de
+ *  ninguna cuenta en particular). */
+export async function getDashboardStats(): Promise<DashboardStats> {
+  const [accountCount, transferCount, blockedCount] = await Promise.all([
+    simulateRead<number>('get_account_count', []),
+    simulateRead<number>('get_transfer_count', []),
+    simulateRead<number>('get_blocked_count', []),
+  ])
+  return { accountCount, transferCount, blockedCount }
+}

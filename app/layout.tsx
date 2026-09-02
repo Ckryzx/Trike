@@ -3,6 +3,7 @@ import { Lexend, Source_Sans_3 } from "next/font/google";
 import "./globals.css";
 import { WalletProvider } from "@/lib/wallet-context";
 import { Navbar } from "@/components/Navbar";
+import { AuthSessionProvider } from "@/components/AuthSessionProvider";
 
 const lexend = Lexend({
   subsets: ["latin"],
@@ -29,10 +30,12 @@ export default function RootLayout({
   return (
     <html lang="es" className={`${lexend.variable} ${sourceSans.variable}`}>
       <body className="min-h-screen font-body">
-        <WalletProvider>
-          <Navbar />
-          <main>{children}</main>
-        </WalletProvider>
+        <AuthSessionProvider>
+          <WalletProvider>
+            <Navbar />
+            <main>{children}</main>
+          </WalletProvider>
+        </AuthSessionProvider>
       </body>
     </html>
   );

@@ -46,6 +46,8 @@ pub enum DataKey {
     ScamReport(Address),
     ReportedIndex(u32),
     ReportedCount,
+    AccountCount,
+    BlockedCount,
 }
 
 #[contracttype]
@@ -136,6 +138,10 @@ impl TrikeContract {
             recent_deposit_at: 0,
         };
         env.storage().persistent().set(&key, &account);
+
+        let count: u32 = env.storage().instance().get(&DataKey::AccountCount).unwrap_or(0);
+        env.storage().instance().set(&DataKey::AccountCount, &(count + 1));
+
         Ok(())
     }
 
@@ -416,6 +422,10 @@ impl TrikeContract {
                 }
             }
         };
+        if !report.blocked {
+            let count: u32 = env.storage().instance().get(&DataKey::BlockedCount).unwrap_or(0);
+            env.storage().instance().set(&DataKey::BlockedCount, &(count + 1));
+        }
         report.blocked = true;
         env.storage().persistent().set(&key, &report);
         Ok(())
@@ -438,6 +448,20 @@ impl TrikeContract {
     /// Cantidad de reportes necesarios antes de que el admin deba revisar la cuenta.
     pub fn get_scam_report_threshold(_env: Env) -> u32 {
         SCAM_REPORT_THRESHOLD
+    }
+
+    /// Métricas agregadas para el dashboard de clientes: cuentas protegidas,
+    /// solicitudes de transferencia procesadas y cuentas bloqueadas por estafa.
+    pub fn get_account_count(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::AccountCount).unwrap_or(0)
+    }
+
+    pub fn get_transfer_count(env: Env) -> u64 {
+        env.storage().instance().get(&DataKey::RequestCounter).unwrap_or(0)
+    }
+
+    pub fn get_blocked_count(env: Env) -> u32 {
+        env.storage().instance().get(&DataKey::BlockedCount).unwrap_or(0)
     }
 }
 
