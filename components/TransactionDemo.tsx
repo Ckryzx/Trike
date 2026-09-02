@@ -27,7 +27,7 @@ export function TransactionDemo() {
       <div className="absolute left-[15%] top-[68%] flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1">
         <svg width="56" height="68" viewBox="0 0 72 88" style={{ overflow: 'visible' }}>
           <motion.g
-            initial={false}
+            initial={{ scale: 1 }}
             animate={reduceMotion ? undefined : { scale: [1, 1.08, 1] }}
             transition={{ duration: 2.4, repeat: Infinity, ease: 'easeInOut' }}
             style={{ transformOrigin: '36px 19px' }}
@@ -49,7 +49,7 @@ export function TransactionDemo() {
           width="52"
           height="52"
           viewBox="0 0 64 64"
-          initial={false}
+          initial={{ y: 0 }}
           animate={reduceMotion ? undefined : { y: [0, -3, 0] }}
           transition={{ duration: 2.6, repeat: Infinity, ease: 'easeInOut' }}
         >
@@ -72,7 +72,7 @@ export function TransactionDemo() {
       <motion.div
         className="absolute top-[68%] z-20 -translate-x-1/2 -translate-y-1/2"
         style={{ left: '15%' }}
-        initial={false}
+        initial={{ left: '15%', opacity: 1 }}
         animate={
           reduceMotion
             ? undefined
@@ -94,7 +94,7 @@ export function TransactionDemo() {
       {/* el guardian (triceratops) cae a bloquear la transaccion */}
       <motion.div
         className="absolute left-[50%] top-[68%] z-30 flex -translate-x-1/2 -translate-y-1/2 flex-col items-center gap-1"
-        initial={false}
+        initial={{ y: -90, opacity: 0, scale: 0.6 }}
         animate={
           reduceMotion
             ? undefined
@@ -126,7 +126,7 @@ export function TransactionDemo() {
       {/* destello de bloqueo al impactar */}
       <motion.div
         className="absolute left-[50%] top-[68%] z-40 -translate-x-1/2 -translate-y-1/2"
-        initial={false}
+        initial={{ opacity: 0, scale: 0.5 }}
         animate={
           reduceMotion
             ? undefined
